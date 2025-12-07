@@ -19,6 +19,10 @@ builder.Services.AddSingleton<IStorage>(sp =>
 // Hosted service to initialize container at startup
 builder.Services.AddHostedService<BlobStorageInitializer>();
 
+// Add health checks and register a check for blob storage readiness
+builder.Services.AddHealthChecks()
+    .AddCheck<BlobStorageHealthCheck>("blobstorage");
+
 builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
 
@@ -39,5 +43,9 @@ app.UseRouting();
 app.MapDefaultControllerRoute();
 app.MapControllers();
 app.MapRazorPages();
+
+// Health check endpoints
+app.MapHealthChecks("/health");
+app.MapHealthChecks("/health/ready");
 
 app.Run();
