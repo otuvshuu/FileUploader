@@ -8,6 +8,16 @@ var builder = WebApplication.CreateBuilder(args);
 // Bind AzureStorageConfig from configuration
 builder.Services.Configure<AzureStorageConfig>(builder.Configuration.GetSection("AzureStorageConfig"));
 
+// Register AzureComputerVisionService with config from appsettings
+var visionConfig = builder.Configuration.GetSection("AzureComputerVision");
+// Prefer environment variables for Computer Vision config
+var visionEndpoint = Environment.GetEnvironmentVariable("AzureComputerVision__Endpoint") ?? visionConfig["Endpoint"];
+var visionApiKey = Environment.GetEnvironmentVariable("AzureComputerVision__ApiKey") ?? visionConfig["ApiKey"];
+builder.Services.AddSingleton(new AzureComputerVisionService(
+    visionEndpoint,
+    visionApiKey
+));
+
 // Register BlobStorage as a singleton IStorage
 builder.Services.AddSingleton<IStorage>(sp =>
 {
