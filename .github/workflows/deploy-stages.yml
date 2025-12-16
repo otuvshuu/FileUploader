@@ -1,0 +1,47 @@
+name: Deploy Staging/Production
+
+on:
+  push:
+    branches:
+      - development
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    needs: build
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --configuration Release --no-restore
+
+    - name: Publish
+      run: dotnet publish -c Release -o publish
+
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v4
+      with:
+        app-name: ${{ github.ref == 'refs/heads/main' && secrets.AZURE_WEBAPP_PROD_NAME || secrets.AZURE_WEBAPP_STAGING_NAME }}
+        publish-profile: ${{ github.ref == 'refs/heads/main' && secrets.AZURE_WEBAPP_PROD_PUBLISH_PROFILE || secrets.AZURE_WEBAPP_STAGING_PUBLISH_PROFILE }}
+        package: publish
+
+    - name: Notify
+      if: always()
+      run: echo "Deployed to ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}"

@@ -19,10 +19,12 @@ namespace FileUploader.Controllers
         private static readonly Regex filenameRegex = new Regex("[^a-zA-Z0-9._]");
 
         private readonly IStorage storage;
+        private readonly AzureComputerVisionService visionService;
 
-        public FilesController(IStorage storage)
+        public FilesController(IStorage storage, AzureComputerVisionService visionService)
         {
             this.storage = storage;
+            this.visionService = visionService;
         }
 
         // GET /api/Files
@@ -45,23 +47,33 @@ namespace FileUploader.Controllers
         [HttpPost()]
         public async Task<IActionResult> Upload(IFormFile file)
         {
-            // IFormFile.FileName is untrustworthy user input, and we're
-            // using it for both blob names and for display on the page,
-            // so we aggressively sanitize. In a real app, we'd probably
-            // do something more complex and robust for handling filenames.
             var name = SanitizeFilename(file.FileName);
-
             if (String.IsNullOrWhiteSpace(name))
             {
                 throw new ArgumentException();
             }
-
             using (Stream stream = file.OpenReadStream())
             {
                 await storage.Save(stream, name);
             }
-
             return Accepted();
+        }
+
+        // POST /api/Files/analyze
+        // Analyze an uploaded image for tags and objects using Azure Computer Vision
+        [HttpPost("analyze")]
+        public async Task<IActionResult> Analyze(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest("No file uploaded.");
+
+            using var ms = new MemoryStream();
+            await file.CopyToAsync(ms);
+            var imageBytes = ms.ToArray();
+
+            var (tags, objects) = await visionService.AnalyzeImageAsync(imageBytes);
+
+            return Ok(new { tags, objects });
         }
 
         // GET /api/Files/{filename}
@@ -80,12 +92,10 @@ namespace FileUploader.Controllers
         private static string SanitizeFilename(string filename)
         {
             var sanitizedFilename = filenameRegex.Replace(filename, "").TrimEnd('.');
-
             if (sanitizedFilename.Length > MaxFilenameLength)
             {
                 sanitizedFilename = sanitizedFilename.Substring(0, MaxFilenameLength);
             }
-
             return sanitizedFilename;
         }
     }
